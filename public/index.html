@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="da">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Makroblik</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Makroblik</p>
+          <h1>Et enkelt overblik over hvor &oslash;konomien er p&aring; vej hen.</h1>
+          <p class="lede">
+            N&oslash;gletal forklaret i almindeligt sprog, s&aring; man hurtigt kan se om
+            &oslash;konomien k&oslash;ler af, stabiliserer sig eller er p&aring; vej op i tempo.
+          </p>
+        </div>
+
+        <div class="hero-panel">
+          <p class="panel-label">Samlet signal</p>
+          <h2 id="outlook-title">Indl&aelig;ser</h2>
+          <p id="outlook-text" class="panel-text"></p>
+          <div class="panel-meta">
+            <span>Opdateret <strong id="updated-at"></strong></span>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="summary-band">
+          <div>
+            <p class="section-kicker">Kort fortalt</p>
+            <h2 id="summary-title">Henter &oslash;konomisk opsummering</h2>
+          </div>
+          <p id="summary-description" class="summary-text"></p>
+        </section>
+
+        <section class="indicators-section">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">N&oslash;gletal</p>
+              <h2>De vigtigste bev&aelig;gelser lige nu</h2>
+            </div>
+            <p class="section-note">
+              Hvert kort viser udviklingen fra sidste m&aring;ling og hvad den typisk
+              betyder for almindelige husholdninger.
+            </p>
+          </div>
+
+          <div id="indicator-grid" class="indicator-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="indicator-template">
+      <article class="indicator-card">
+        <div class="card-top">
+          <div>
+            <p class="card-label"></p>
+            <h3 class="card-value"></h3>
+          </div>
+          <span class="trend-pill"></span>
+        </div>
+        <div class="history-block">
+          <div class="history-heading">
+            <span class="history-label">Seneste udvikling</span>
+            <span class="history-window">12 målinger</span>
+          </div>
+          <div class="history-chart" aria-label="Historisk udvikling">
+            <div class="history-scale">
+              <span class="scale-top"></span>
+              <span class="scale-mid"></span>
+              <span class="scale-bottom"></span>
+            </div>
+            <div class="history-plot"></div>
+          </div>
+          <div class="history-foot">
+            <span class="history-start"></span>
+            <span class="history-end"></span>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="importance"></span>
+          <span class="delta"></span>
+        </div>
+        <p class="card-explanation"></p>
+      </article>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

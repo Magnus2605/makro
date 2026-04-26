@@ -1,0 +1,9 @@
+{
+  "name": "makrotool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simple macroeconomic trends tool with frontend and backend",
+  "scripts": {
+    "start": "python server.py"
+  }
+}
