@@ -4,6 +4,7 @@
   "private": true,
   "description": "Simple macroeconomic trends tool with frontend and backend",
   "scripts": {
-    "start": "python server.py"
+    "start": "node server.js",
+    "start:python": "python server.py"
   }
 }

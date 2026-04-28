@@ -12,6 +12,8 @@
   --warning: #a54f36;
   --warning-soft: rgba(165, 79, 54, 0.14);
   --neutral: #58707f;
+  --stable: #1e5a8a;
+  --stable-soft: rgba(30, 90, 138, 0.16);
   --shadow: 0 18px 50px rgba(73, 53, 35, 0.1);
 }
 
@@ -28,6 +30,48 @@ body {
     radial-gradient(circle at top left, rgba(201, 109, 66, 0.22), transparent 28%),
     radial-gradient(circle at top right, rgba(36, 112, 77, 0.16), transparent 24%),
     linear-gradient(180deg, #f8f2ea 0%, #f5eee3 52%, #efe2d3 100%);
+}
+
+.page-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(246, 239, 228, 0.94);
+  backdrop-filter: blur(8px);
+}
+
+body.is-loading .page-loading {
+  display: flex;
+}
+
+.page-loading-text {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.fallback-banner {
+  max-width: min(1200px, calc(100% - 32px));
+  margin: 12px auto 18px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(165, 79, 54, 0.35);
+  background: rgba(165, 79, 54, 0.08);
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.fallback-banner[hidden] {
+  display: none;
+}
+
+.fallback-banner strong {
+  font-weight: 800;
 }
 
 .page-shell {
@@ -68,7 +112,16 @@ body {
   font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.eyebrow,
+.section-kicker,
+.panel-label {
   color: var(--accent);
+}
+
+.card-label {
+  color: var(--positive);
 }
 
 .hero h1,
@@ -127,6 +180,29 @@ body {
   font-size: 0.92rem;
 }
 
+.outlook-help {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.outlook-help summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.outlook-help summary::-webkit-details-marker {
+  color: var(--accent);
+}
+
+.outlook-help p {
+  margin: 10px 0 0;
+}
+
 .content {
   display: grid;
   gap: 24px;
@@ -158,6 +234,25 @@ body {
   gap: 18px;
 }
 
+.indicator-sections {
+  display: grid;
+  gap: 36px;
+}
+
+.indicator-group {
+  display: grid;
+  gap: 14px;
+}
+
+.group-title {
+  margin: 0;
+  font-family: "Newsreader", serif;
+  font-size: clamp(1.35rem, 3vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
 .section-heading {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -169,9 +264,14 @@ body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
+  align-items: stretch;
 }
 
 .indicator-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   border-radius: 20px;
   padding: 22px;
 }
@@ -233,8 +333,8 @@ body {
 }
 
 .trend-pill[data-tone="neutral"] {
-  background: rgba(88, 112, 127, 0.14);
-  color: var(--neutral);
+  background: var(--stable-soft);
+  color: var(--stable);
 }
 
 .history-chart {
@@ -475,12 +575,60 @@ body {
   font-size: 0.92rem;
 }
 
+.indicator-card .card-explanation {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.card-source {
+  margin-top: auto;
+  margin-bottom: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.card-source-link {
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.card-source-link:hover {
+  color: var(--accent);
+}
+
+.site-footer {
+  margin-top: 8px;
+  padding: 22px 0 8px;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.site-footer a {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 960px) {
   .hero,
   .summary-band,
   .section-heading,
   .indicator-grid {
     grid-template-columns: 1fr;
+  }
+
+  .indicator-sections {
+    gap: 28px;
   }
 
   .hero h1 {

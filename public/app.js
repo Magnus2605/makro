@@ -141,7 +141,7 @@ function buildHistoryScale(history, options = {}) {
 }
 
 async function loadMacroData() {
-  const response = await fetch("/api/macro");
+  const response = await fetch("/api/macro", { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Kunne ikke hente makrodata");
   }
@@ -162,7 +162,7 @@ function renderIndicator(indicator) {
   const scaleUnit = indicator.scaleUnit ?? indicator.unit;
   const history = buildHistoryScale(indicator.history || [], {
     mode: chartMode,
-    includeZero: indicator.id === "consumer-confidence"
+    includeZero: Boolean(indicator.includeZero)
   });
 
   node.querySelector(".card-label").textContent = indicator.label;
@@ -273,26 +273,89 @@ function renderIndicator(indicator) {
     });
   }
 
+  const sourceWrap = node.querySelector(".card-source");
+  const sourceLink = node.querySelector(".card-source-link");
+  const href = indicator.source?.href;
+  const tableId = indicator.source?.table;
+  if (href && tableId) {
+    sourceLink.href = href;
+    sourceLink.textContent = `Åbn tabel ${tableId} i Statistikbanken`;
+  } else if (sourceWrap) {
+    sourceWrap.hidden = true;
+  }
+
   return node;
 }
 
+function hidePageLoading() {
+  document.body.classList.remove("is-loading");
+  const loadingEl = document.getElementById("page-loading");
+  if (loadingEl) {
+    loadingEl.setAttribute("aria-busy", "false");
+  }
+}
+
 function renderDashboard(data) {
+  hidePageLoading();
+
+  const banner = document.getElementById("fallback-banner");
+  if (banner) {
+    banner.hidden = data.live !== false;
+  }
+
   document.getElementById("outlook-title").textContent = data.outlook;
   document.getElementById("outlook-text").textContent = data.outlookText;
   document.getElementById("updated-at").textContent = data.updatedAt;
   document.getElementById("summary-title").textContent = data.summary.title;
   document.getElementById("summary-description").textContent = data.summary.description;
 
-  const grid = document.getElementById("indicator-grid");
-  grid.innerHTML = "";
-  data.indicators.forEach((indicator) => {
-    grid.appendChild(renderIndicator(indicator));
+  const root = document.getElementById("indicator-sections");
+  root.innerHTML = "";
+
+  const grouped =
+    data.groups && data.groups.length
+      ? data.groups
+      : [{ title: null, indicators: data.indicators || [] }];
+
+  grouped.forEach((group) => {
+    const section = document.createElement("section");
+    section.className = "indicator-group";
+
+    if (group.title) {
+      const heading = document.createElement("h3");
+      heading.className = "group-title";
+      heading.textContent = group.title;
+      section.appendChild(heading);
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "indicator-grid";
+    (group.indicators || []).forEach((indicator) => {
+      grid.appendChild(renderIndicator(indicator));
+    });
+    section.appendChild(grid);
+    root.appendChild(section);
   });
 }
 
 function renderError(message) {
-  const grid = document.getElementById("indicator-grid");
-  grid.innerHTML = `<article class="indicator-card"><h3>Fejl</h3><p class="card-explanation">${message}</p></article>`;
+  hidePageLoading();
+  const banner = document.getElementById("fallback-banner");
+  if (banner) {
+    banner.hidden = true;
+  }
+  const root = document.getElementById("indicator-sections");
+  root.innerHTML = "";
+  const article = document.createElement("article");
+  article.className = "indicator-card";
+  const h = document.createElement("h3");
+  h.textContent = "Fejl";
+  const p = document.createElement("p");
+  p.className = "card-explanation";
+  p.textContent = message;
+  article.appendChild(h);
+  article.appendChild(p);
+  root.appendChild(article);
 }
 
 loadMacroData().then(renderDashboard).catch((error) => {

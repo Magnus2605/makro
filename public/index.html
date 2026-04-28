@@ -3,7 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Makroblik giver et enkelt overblik over dansk økonomi med nøgletal fra Danmarks Statistik — forklaret i almindeligt sprog."
+    />
+    <meta property="og:title" content="Makroblik — dansk økonomi i overblik" />
+    <meta
+      property="og:description"
+      content="Se inflation, ledighed, BNP, handel, bolig og mere — grupperet efter tema med tal fra Danmarks Statistik."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="da_DK" />
+    <meta name="twitter:card" content="summary" />
     <title>Makroblik</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,7 +25,23 @@
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body class="is-loading">
+    <div id="page-loading" class="page-loading" aria-busy="true" aria-live="polite">
+      <p class="page-loading-text">Henter nøgletal fra Danmarks Statistik …</p>
+    </div>
+
+    <div
+      id="fallback-banner"
+      class="fallback-banner"
+      role="status"
+      hidden
+    >
+      <p>
+        Live-data fra Danmarks Statistik kunne ikke hentes lige nu. Du ser derfor
+        <strong>gemte eksempeltal</strong> — opdater siden senere for aktuelle værdier.
+      </p>
+    </div>
+
     <div class="page-shell">
       <header class="hero">
         <div class="hero-copy">
@@ -31,6 +60,16 @@
           <div class="panel-meta">
             <span>Opdateret <strong id="updated-at"></strong></span>
           </div>
+          <details class="outlook-help">
+            <summary>Hvordan l&aelig;ses det samlede signal?</summary>
+            <p>
+              Vi gennemg&aring;r hvert n&oslash;gtals seneste udvikling: udvikling i den &quot;rigtige&quot; retning
+              giver plus, i den modsatte retning minus, og u&aelig;ndret giver neutralt. Summen af disse signaler
+              samles til et samlet budskab &mdash; fra mere balanceret (&quot;Bedre balance&quot;) over blandet
+              (&quot;Stabilisering&quot;) til svagere konjunktur (&quot;Afmatning&quot;). Det er et forenklet
+              fingerpeg, ikke et prognosev&aelig;rkt&oslash;j.
+            </p>
+          </details>
         </div>
       </header>
 
@@ -50,14 +89,22 @@
               <h2>De vigtigste bev&aelig;gelser lige nu</h2>
             </div>
             <p class="section-note">
-              Hvert kort viser udviklingen fra sidste m&aring;ling og hvad den typisk
-              betyder for almindelige husholdninger.
+              Tallene er fordelt p&aring; temaer, s&aring; du hurtigt kan se b&aring;de helhed og enkelte dele.
+              Hvert kort forklarer udviklingen siden sidste m&aring;ling og hvad den typisk betyder i hverdagen.
             </p>
           </div>
 
-          <div id="indicator-grid" class="indicator-grid"></div>
+          <div id="indicator-sections" class="indicator-sections"></div>
         </section>
       </main>
+
+      <footer class="site-footer">
+        <p>
+          Data kommer fra
+          <a href="https://www.dst.dk/" target="_blank" rel="noopener noreferrer">Danmarks Statistik</a>
+          (Statistikbanken). Makroblik er et uformelt overblik og erstatter ikke officielle publikationer eller r&aring;dgivning.
+        </p>
+      </footer>
     </div>
 
     <template id="indicator-template">
@@ -92,6 +139,9 @@
           <span class="delta"></span>
         </div>
         <p class="card-explanation"></p>
+        <p class="card-source">
+          <a class="card-source-link" target="_blank" rel="noopener noreferrer"></a>
+        </p>
       </article>
     </template>
 

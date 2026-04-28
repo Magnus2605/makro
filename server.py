@@ -1,18 +1,74 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 
-PORT = 3000
+def _load_optional_dotenv() -> None:
+    """Indlæs .env fra projektroden uden ekstra pip-afhængigheder."""
+    env_file = Path(__file__).resolve().parent / ".env"
+    if not env_file.is_file():
+        return
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        value = value.strip().strip('"').strip("'")
+        os.environ[key] = value
+
+
+_load_optional_dotenv()
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return int(str(raw).strip())
+    except ValueError:
+        return default
+
+
+def _env_str(name: str, default: str) -> str:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    stripped = raw.strip()
+    return stripped if stripped else default
+
+
+PORT = _env_int("PORT", 3000)
+if not (1 <= PORT <= 65535):
+    PORT = 3000
+
+HOST = _env_str("HOST", "127.0.0.1")
+if not HOST:
+    HOST = "127.0.0.1"
+
 PUBLIC_DIR = Path(__file__).parent / "public"
-DST_API_URL = "https://api.statbank.dk/v1/data"
-CACHE_TTL_SECONDS = 60 * 60 * 6
+
+
+def statbank_define_url(table_id: str) -> str:
+    """Dyb link til tabel i Statistikbankens Define-visning."""
+    return (
+        "https://www.statistikbanken.dk/statbank5a/SelectVarVal/Define.asp?"
+        + urlencode({"Maintable": table_id, "PLanguage": "0"})
+    )
+DST_API_URL = _env_str("DST_API_URL", "https://api.statbank.dk/v1/data")
+CACHE_TTL_SECONDS = max(0, _env_int("CACHE_TTL_SECONDS", 60 * 60 * 6))
 
 
 FALLBACK_PAYLOAD = {
@@ -30,6 +86,7 @@ FALLBACK_PAYLOAD = {
         "De fleste n\u00f8gletal bev\u00e6ger sig i en retning, der tyder p\u00e5 en mere balanceret dansk "
         "\u00f8konomi, men tempoet er ikke specielt h\u00f8jt."
     ),
+    "live": False,
     "indicators": [
         {
             "id": "inflation",
@@ -49,7 +106,11 @@ FALLBACK_PAYLOAD = {
                 "label": "Stiger",
                 "tone": "warning",
             },
-            "source": {"table": "PRIS01", "label": "Danmarks Statistik"},
+            "source": {
+                "table": "PRIS01",
+                "label": "Danmarks Statistik",
+                "href": statbank_define_url("PRIS01"),
+            },
         },
         {
             "id": "unemployment",
@@ -69,7 +130,11 @@ FALLBACK_PAYLOAD = {
                 "label": "Stiger",
                 "tone": "warning",
             },
-            "source": {"table": "AKU101K", "label": "Danmarks Statistik"},
+            "source": {
+                "table": "AKU101K",
+                "label": "Danmarks Statistik",
+                "href": statbank_define_url("AKU101K"),
+            },
         },
         {
             "id": "gdp-growth",
@@ -89,7 +154,11 @@ FALLBACK_PAYLOAD = {
                 "label": "Falder",
                 "tone": "warning",
             },
-            "source": {"table": "NKN1", "label": "Danmarks Statistik"},
+            "source": {
+                "table": "NKN1",
+                "label": "Danmarks Statistik",
+                "href": statbank_define_url("NKN1"),
+            },
         },
     ],
 }
@@ -158,6 +227,7 @@ SERIES_CONFIG = {
         "label": "Forbrugertillid",
         "unit": "%",
         "scaleUnit": "%",
+        "includeZero": True,
         "importance": "Mellem",
         "explanation": (
             "Forbrugertilliden viser, hvordan danskerne ser på økonomien lige nu og lidt frem. "
@@ -241,7 +311,136 @@ SERIES_CONFIG = {
         ),
         "sourceLabel": "Danmarks Statistik, MPK3",
     },
+    "business-confidence": {
+        "table": "ETILLID",
+        "variables": [
+            {"code": "INDIKATOR", "values": ["TE"]},
+            {"code": "Tid", "values": ["*"]},
+        ],
+        "goodDirection": "up",
+        "chartMode": "line",
+        "label": "Erhvervstillid",
+        "unit": "Indeks",
+        "scaleUnit": "",
+        "includeZero": True,
+        "importance": "Mellem",
+        "explanation": (
+            "Erhvervstilliden samler tilliden i industri, bygge og anlæg, detail og service. "
+            "Værdien 100 svarer til historisk middel; over 100 betyder typisk mere optimisme."
+        ),
+        "sourceLabel": "Danmarks Statistik, ETILLID",
+    },
+    "export-growth": {
+        "table": "NKN1",
+        "variables": [
+            {"code": "TRANSAKT", "values": ["P6D"]},
+            {"code": "PRISENHED", "values": ["L_V"]},
+            {"code": "SÆSON", "values": ["Y"]},
+            {"code": "Tid", "values": ["*"]},
+        ],
+        "goodDirection": "up",
+        "label": "Eksport (vækst)",
+        "unit": "%",
+        "importance": "Mellem",
+        "explanation": (
+            "Viser realvækst i eksport af varer og tjenester i forhold til forrige kvartal. "
+            "Højere vækst her understøtter ofte aktivitet og beskæftigelse i eksponerede sektorer."
+        ),
+        "sourceLabel": "Danmarks Statistik, NKN1",
+    },
+    "private-consumption": {
+        "table": "NKN1",
+        "variables": [
+            {"code": "TRANSAKT", "values": ["P31S14D"]},
+            {"code": "PRISENHED", "values": ["L_V"]},
+            {"code": "SÆSON", "values": ["Y"]},
+            {"code": "Tid", "values": ["*"]},
+        ],
+        "goodDirection": "up",
+        "label": "Husholdningsforbrug",
+        "unit": "%",
+        "importance": "Mellem",
+        "explanation": (
+            "Husholdningernes forbrugsudgifter er en stor del af efterspørgslen i økonomien. "
+            "Stigninger peger typisk på mere aktivitet i detail og tjenester."
+        ),
+        "sourceLabel": "Danmarks Statistik, NKN1",
+    },
+    "fixed-investment": {
+        "table": "NKN1",
+        "variables": [
+            {"code": "TRANSAKT", "values": ["P51GD"]},
+            {"code": "PRISENHED", "values": ["L_V"]},
+            {"code": "SÆSON", "values": ["Y"]},
+            {"code": "Tid", "values": ["*"]},
+        ],
+        "goodDirection": "up",
+        "label": "Faste investeringer",
+        "unit": "%",
+        "importance": "Mellem",
+        "explanation": (
+            "Faste bruttoinvesteringer dækker fx maskiner, byggeri og udstyr. Det siger noget om, "
+            "hvor meget virksomhederne tør binde kapital for fremtidig produktion."
+        ),
+        "sourceLabel": "Danmarks Statistik, NKN1",
+    },
+    "import-growth": {
+        "table": "NKN1",
+        "variables": [
+            {"code": "TRANSAKT", "values": ["P7K"]},
+            {"code": "PRISENHED", "values": ["L_V"]},
+            {"code": "S\u00c6SON", "values": ["Y"]},
+            {"code": "Tid", "values": ["*"]},
+        ],
+        "goodDirection": "up",
+        "label": "Import (v\u00e6kst)",
+        "unit": "%",
+        "importance": "Mellem",
+        "explanation": (
+            "Import af varer og tjenester viser, hvor meget Danmark k\u00f8ber fra udlandet "
+            "m\u00e5lt som realv\u00e6kst kvartal til kvartal. Det p\u00e5virker b\u00e5de virksomhedernes "
+            "indk\u00f8b og husholdningernes forbrug af importerede varer."
+        ),
+        "sourceLabel": "Danmarks Statistik, NKN1",
+    },
+    "government-consumption": {
+        "table": "NKN1",
+        "variables": [
+            {"code": "TRANSAKT", "values": ["P3S13D"]},
+            {"code": "PRISENHED", "values": ["L_V"]},
+            {"code": "S\u00c6SON", "values": ["Y"]},
+            {"code": "Tid", "values": ["*"]},
+        ],
+        "goodDirection": "up",
+        "label": "Offentligt forbrug",
+        "unit": "%",
+        "importance": "Mellem",
+        "explanation": (
+            "Det offentlige forbrug d\u00e6kker fx sundhed, undervisning og administration. "
+            "St\u00f8rre v\u00e6kst her betyder typisk mere aktivitet i den del af \u00f8konomien, "
+            "som kommuner, regioner og stat driver."
+        ),
+        "sourceLabel": "Danmarks Statistik, NKN1",
+    },
 }
+
+
+GROUP_DEFS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("overview", "Samlet \u00f8konomi", ("inflation", "unemployment", "gdp-growth")),
+    (
+        "demand",
+        "Forbrug og offentlig sektor",
+        ("consumer-confidence", "private-consumption", "retail-sales", "government-consumption"),
+    ),
+    ("business", "Erhverv og investering", ("business-confidence", "industry-production", "fixed-investment")),
+    ("trade", "Handel med udlandet", ("export-growth", "import-growth")),
+    ("housing", "Bolig og finansiering", ("housing-prices", "interest-rate")),
+)
+
+
+INDICATOR_IDS: tuple[str, ...] = tuple(
+    indicator_id for _, _, ids in GROUP_DEFS for indicator_id in ids
+)
 
 
 macro_cache: dict[str, object] = {
@@ -361,6 +560,7 @@ def build_indicator(indicator_id: str, series_payload: dict[str, object]) -> dic
         "explanation": config["explanation"],
         "chartMode": config.get("chartMode", "bar"),
         "scaleUnit": config.get("scaleUnit", config["unit"]),
+        "includeZero": config.get("includeZero", False),
         "trend": get_trend(current_point["value"], previous_point["value"], config["goodDirection"]),
         "latestPeriod": current_point["period"],
         "previousPeriod": previous_point["period"],
@@ -369,6 +569,7 @@ def build_indicator(indicator_id: str, series_payload: dict[str, object]) -> dic
             "table": config["table"],
             "label": series_payload["sourceLabel"],
             "updated": series_payload["updated"],
+            "href": statbank_define_url(str(config["table"])),
         },
     }
 
@@ -385,6 +586,12 @@ def build_summary(indicators: list[dict[str, object]]) -> tuple[str, str, str, s
     industry_production = find_indicator("industry-production")
     housing_prices = find_indicator("housing-prices")
     interest_rate = find_indicator("interest-rate")
+    business_confidence = find_indicator("business-confidence")
+    export_growth = find_indicator("export-growth")
+    private_consumption = find_indicator("private-consumption")
+    fixed_investment = find_indicator("fixed-investment")
+    import_growth = find_indicator("import-growth")
+    government_consumption = find_indicator("government-consumption")
 
     outlook_score = 0
     for item in indicators:
@@ -440,6 +647,36 @@ def build_summary(indicators: list[dict[str, object]]) -> tuple[str, str, str, s
         parts.append(
             f"Renten ligger p\u00e5 {interest_rate['current']:.1f} pct. i {month_label(interest_rate['latestPeriod'])}."
         )
+    if business_confidence:
+        parts.append(
+            f"Erhvervstilliden ligger p\u00e5 {business_confidence['current']:.1f} i "
+            f"{month_label(business_confidence['latestPeriod'])}."
+        )
+    if export_growth:
+        parts.append(
+            f"Eksporten voksede {export_growth['current']:.1f} pct. i "
+            f"{quarter_label(export_growth['latestPeriod'])}."
+        )
+    if private_consumption:
+        parts.append(
+            f"Husholdningsforbruget steg {private_consumption['current']:.1f} pct. i "
+            f"{quarter_label(private_consumption['latestPeriod'])}."
+        )
+    if fixed_investment:
+        parts.append(
+            f"De faste investeringer ændrede sig {fixed_investment['current']:.1f} pct. i "
+            f"{quarter_label(fixed_investment['latestPeriod'])}."
+        )
+    if import_growth:
+        parts.append(
+            f"Importen voksede {import_growth['current']:.1f} pct. i "
+            f"{quarter_label(import_growth['latestPeriod'])}."
+        )
+    if government_consumption:
+        parts.append(
+            f"Det offentlige forbrug steg {government_consumption['current']:.1f} pct. i "
+            f"{quarter_label(government_consumption['latestPeriod'])}."
+        )
 
     summary_description = " ".join(parts) + " Det peger p\u00e5 en \u00f8konomi, der stadig bev\u00e6ger sig fremad, men i et mere forsigtigt tempo."
 
@@ -447,22 +684,25 @@ def build_summary(indicators: list[dict[str, object]]) -> tuple[str, str, str, s
 
 
 def build_live_payload() -> dict[str, object]:
-    indicators = []
-    updated_dates = []
+    indicators: list[dict[str, object]] = []
+    updated_dates: list[str] = []
+    groups_payload: list[dict[str, object]] = []
 
-    for indicator_id in (
-        "inflation",
-        "unemployment",
-        "gdp-growth",
-        "consumer-confidence",
-        "retail-sales",
-        "industry-production",
-        "housing-prices",
-        "interest-rate",
-    ):
-        series_payload = fetch_dst_series(SERIES_CONFIG[indicator_id])
-        indicators.append(build_indicator(indicator_id, series_payload))
-        updated_dates.append(series_payload["updated"])
+    for group_id, group_title, indicator_ids in GROUP_DEFS:
+        section_indicators: list[dict[str, object]] = []
+        for indicator_id in indicator_ids:
+            series_payload = fetch_dst_series(SERIES_CONFIG[indicator_id])
+            built = build_indicator(indicator_id, series_payload)
+            section_indicators.append(built)
+            indicators.append(built)
+            updated_dates.append(series_payload["updated"])
+        groups_payload.append(
+            {
+                "id": group_id,
+                "title": group_title,
+                "indicators": section_indicators,
+            }
+        )
 
     outlook, outlook_text, summary_title, summary_description = build_summary(indicators)
     clean_dates = [value[:10] for value in updated_dates if value]
@@ -473,19 +713,28 @@ def build_live_payload() -> dict[str, object]:
         "summary": {"title": summary_title, "description": summary_description},
         "outlook": outlook,
         "outlookText": outlook_text,
+        "live": True,
+        "groups": groups_payload,
         "indicators": indicators,
     }
 
 
 def get_macro_payload() -> dict[str, object]:
     now = time.time()
-    if macro_cache["expires_at"] > now:
-        return macro_cache["payload"]
+    cached = macro_cache.get("payload")
+    if (
+        macro_cache["expires_at"] > now
+        and cached
+        and len(cached.get("indicators", [])) == len(INDICATOR_IDS)
+        and len(cached.get("groups", [])) == len(GROUP_DEFS)
+        and "live" in cached
+    ):
+        return cached
 
     try:
         payload = build_live_payload()
     except Exception:
-        payload = FALLBACK_PAYLOAD
+        payload = dict(FALLBACK_PAYLOAD)
 
     macro_cache["payload"] = payload
     macro_cache["expires_at"] = now + CACHE_TTL_SECONDS
@@ -499,6 +748,8 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(get_macro_payload(), ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Pragma", "no-cache")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -522,6 +773,7 @@ class Handler(BaseHTTPRequestHandler):
             ".html": "text/html; charset=utf-8",
             ".css": "text/css; charset=utf-8",
             ".js": "application/javascript; charset=utf-8",
+            ".svg": "image/svg+xml; charset=utf-8",
         }.get(suffix, "application/octet-stream")
 
         self.send_response(200)
@@ -535,6 +787,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Makrotool running on http://localhost:{PORT}")
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    print(f"Makrotool running on http://{HOST}:{PORT}")
     server.serve_forever()

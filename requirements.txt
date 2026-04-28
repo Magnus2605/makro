@@ -1,0 +1,2 @@
+# Makrotool — Python 3.10+.
+# Ingen tredjepartspakker: kun standardbiblioteket.
