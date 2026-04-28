@@ -1,11 +1,13 @@
 ---
-description: Genstart Python-backend efter ændringer i server eller makrologik
+description: Genstart Python-backend efter ændringer i server, API eller frontend
 alwaysApply: true
 ---
 
-Når du har ændret `server.py` eller andet der påvirker `/api/macro`, makrologik eller StatBank-integration, skal du **genstarte den kørende backend**, så ny kode indlæses.
+Efter **hver** ændring i `server.py`, `public/` (fx `app.js`, `index.html`, `styles.css`) eller andet der påvirker den kørende app eller `/api/macro`, skal du **før du afslutter** opgaven:
 
-- **`npm start`** starter Python via `server.js` (samme proces som `python server.py`).
-- **Port** styres med miljøvariabel `PORT` (standard 3000); stop den proces der lytter på den port, og start igen fra projektmappen.
+1. **Stoppe** processen der lytter på `PORT` (standard **3000**), og **starte** backend igen fra projektmappen (`python server.py`, eller `npm start` hvis I bruger det).
+2. Kort bekræfte at servicen svarer (fx HTTP 200 mod `/` eller `/api/macro`).
 
-Ellers ser brugeren stadig gammel opførsel fra den gamle proces.
+Ellers ser brugeren stadig gammel kode.
+
+- **Port** styres med `PORT` i miljøet; find lytter med f.eks. `netstat -ano | findstr :3000` (Windows) og `Stop-Process -Id <pid> -Force` hvor det er passende.

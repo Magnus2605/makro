@@ -30,6 +30,31 @@ function formatPeriod(period) {
     return "";
   }
 
+  // Årlige serier (fx SILC, EJERFOF): YYYY
+  if (/^\d{4}$/.test(period)) {
+    return period;
+  }
+
+  // Daglige serier (fx markedsdata): YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(period)) {
+    const [y, m, day] = period.split("-").map(Number);
+    const months = [
+      "jan",
+      "feb",
+      "mar",
+      "apr",
+      "maj",
+      "jun",
+      "jul",
+      "aug",
+      "sep",
+      "okt",
+      "nov",
+      "dec"
+    ];
+    return `${day}. ${months[m - 1]} ${y}`;
+  }
+
   if (period.includes("M")) {
     const year = period.slice(0, 4);
     const month = Number(period.slice(5, 7));
@@ -165,6 +190,12 @@ function renderIndicator(indicator) {
     includeZero: Boolean(indicator.includeZero)
   });
 
+  const historyWindowEl = node.querySelector(".history-window");
+  if (historyWindowEl) {
+    const n = (indicator.history || []).length;
+    historyWindowEl.textContent = n === 1 ? "1 måling" : `${n} målinger`;
+  }
+
   node.querySelector(".card-label").textContent = indicator.label;
   node.querySelector(".card-value").textContent = formatValue(indicator.current, indicator.unit);
   node.querySelector(".card-explanation").textContent = indicator.explanation;
@@ -204,6 +235,10 @@ function renderIndicator(indicator) {
   historyPlot.style.setProperty("--zero-line", `${Math.min(Math.max(history.zeroFromTop, 0), 100)}%`);
   historyPlot.classList.toggle("has-negative", history.showZeroLine);
   historyPlot.classList.toggle("is-line", chartMode === "line");
+  historyPlot.classList.toggle(
+    "history-line-thin",
+    chartMode === "line" && indicator.id === "stock-sentiment"
+  );
   historyPlot.dataset.tone = indicator.trend.tone;
 
   if (chartMode === "line") {
@@ -230,26 +265,101 @@ function renderIndicator(indicator) {
     svg.appendChild(line);
     historyPlot.appendChild(svg);
 
-    points.forEach((item) => {
-      const point = document.createElement("button");
-      point.type = "button";
-      point.className = `history-point${item.isNegative ? " is-negative" : ""}`;
-      point.title = `${formatPeriod(item.period)}: ${formatWithUnit(formatCompactValue(item.value), indicator.unit)}`;
-      point.setAttribute("aria-label", `${formatPeriod(item.period)} ${formatWithUnit(formatCompactValue(item.value), indicator.unit)}`);
-      point.style.left = `${item.left}%`;
-      point.style.width = `${item.width}%`;
-      point.style.top = "0";
-      point.style.height = "100%";
-      point.style.setProperty("--dot-x", `${item.dotX}%`);
-      point.style.setProperty("--point-y", `${item.y}%`);
+    const maxLineDots = 16;
+    const showLineDots = points.length <= maxLineDots;
+    historyPlot.classList.toggle("no-line-dots", !showLineDots);
 
-      const tooltip = document.createElement("span");
-      tooltip.className = "bar-tooltip";
-      tooltip.textContent = formatWithUnit(formatCompactValue(item.value), indicator.unit);
+    if (showLineDots) {
+      points.forEach((item) => {
+        const point = document.createElement("button");
+        point.type = "button";
+        point.className = `history-point${item.isNegative ? " is-negative" : ""}`;
+        point.title = `${formatPeriod(item.period)}: ${formatWithUnit(formatCompactValue(item.value), indicator.unit)}`;
+        point.setAttribute("aria-label", `${formatPeriod(item.period)} ${formatWithUnit(formatCompactValue(item.value), indicator.unit)}`);
+        point.style.left = `${item.left}%`;
+        point.style.width = `${item.width}%`;
+        point.style.top = "0";
+        point.style.height = "100%";
+        point.style.setProperty("--dot-x", `${item.dotX}%`);
+        point.style.setProperty("--point-y", `${item.y}%`);
 
-      point.appendChild(tooltip);
-      historyPlot.appendChild(point);
-    });
+        const tooltip = document.createElement("span");
+        tooltip.className = "bar-tooltip";
+        tooltip.textContent = formatWithUnit(formatCompactValue(item.value), indicator.unit);
+
+        point.appendChild(tooltip);
+        historyPlot.appendChild(point);
+      });
+    } else if (points.length > 0) {
+      const crosshair = document.createElement("div");
+      crosshair.className = "history-line-crosshair";
+      crosshair.setAttribute("aria-hidden", "true");
+
+      const hoverTooltip = document.createElement("div");
+      hoverTooltip.className = "history-line-hover-tooltip";
+      hoverTooltip.setAttribute("role", "tooltip");
+
+      const hitLayer = document.createElement("div");
+      hitLayer.className = "history-line-hit-layer";
+
+      const hideHover = () => {
+        crosshair.classList.remove("is-visible");
+        hoverTooltip.classList.remove("is-visible");
+        hoverTooltip.textContent = "";
+      };
+
+      const updateHover = (clientX) => {
+        const rect = historyPlot.getBoundingClientRect();
+        const px = ((clientX - rect.left) / rect.width) * 100;
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        points.forEach((p, i) => {
+          const d = Math.abs(p.x - px);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+          }
+        });
+        const pt = points[bestIdx];
+        crosshair.style.left = `${pt.x}%`;
+        crosshair.classList.add("is-visible");
+        hoverTooltip.style.left = `${pt.x}%`;
+        hoverTooltip.textContent = `${formatPeriod(pt.period)} · ${formatWithUnit(
+          formatCompactValue(pt.value),
+          indicator.unit
+        )}`;
+        hoverTooltip.classList.add("is-visible");
+      };
+
+      hitLayer.addEventListener("mousemove", (e) => updateHover(e.clientX));
+      hitLayer.addEventListener("mouseleave", hideHover);
+
+      hitLayer.addEventListener(
+        "touchstart",
+        (e) => {
+          const t = e.touches[0];
+          if (t) {
+            updateHover(t.clientX);
+          }
+        },
+        { passive: true }
+      );
+
+      hitLayer.addEventListener(
+        "touchmove",
+        (e) => {
+          const t = e.touches[0];
+          if (t) {
+            updateHover(t.clientX);
+          }
+        },
+        { passive: true }
+      );
+
+      historyPlot.appendChild(crosshair);
+      historyPlot.appendChild(hoverTooltip);
+      historyPlot.appendChild(hitLayer);
+    }
   } else {
     history.bars.forEach((item) => {
       const bar = document.createElement("button");
@@ -273,13 +383,44 @@ function renderIndicator(indicator) {
     });
   }
 
+  const ageWrap = node.querySelector(".age-breakdown");
+  const ageYearEl = node.querySelector(".age-breakdown-year");
+  const ageRowsEl = node.querySelector(".age-breakdown-rows");
+  if (
+    ageWrap &&
+    ageRowsEl &&
+    Array.isArray(indicator.ageBreakdown) &&
+    indicator.ageBreakdown.length > 0
+  ) {
+    ageWrap.hidden = false;
+    if (ageYearEl) {
+      ageYearEl.textContent = indicator.breakdownYear ? ` (${indicator.breakdownYear})` : "";
+    }
+    ageRowsEl.innerHTML = "";
+    indicator.ageBreakdown.forEach((row) => {
+      const line = document.createElement("div");
+      line.className = "age-breakdown-row";
+      const lab = document.createElement("span");
+      lab.className = "age-breakdown-label";
+      lab.textContent = row.label;
+      const val = document.createElement("span");
+      val.className = "age-breakdown-value";
+      val.textContent = formatValue(row.value, indicator.unit);
+      line.appendChild(lab);
+      line.appendChild(val);
+      ageRowsEl.appendChild(line);
+    });
+  }
+
   const sourceWrap = node.querySelector(".card-source");
   const sourceLink = node.querySelector(".card-source-link");
   const href = indicator.source?.href;
   const tableId = indicator.source?.table;
+  const linkLabel = indicator.source?.linkLabel;
   if (href && tableId) {
     sourceLink.href = href;
-    sourceLink.textContent = `Åbn tabel ${tableId} i Statistikbanken`;
+    sourceLink.textContent =
+      linkLabel || `Åbn tabel ${tableId} i Statistikbanken`;
   } else if (sourceWrap) {
     sourceWrap.hidden = true;
   }

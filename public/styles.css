@@ -414,6 +414,7 @@ body.is-loading .page-loading {
   height: 100%;
   overflow: visible;
   pointer-events: none;
+  z-index: 0;
 }
 
 .history-area {
@@ -434,6 +435,63 @@ body.is-loading .page-loading {
 
 .history-plot[data-tone="warning"] .history-line {
   stroke: rgba(201, 63, 63, 0.9);
+}
+
+/* OMX C25 mange datapunkter — tynd linje så den ikke dominerer grafen */
+.history-plot.history-line-thin .history-line {
+  stroke-width: 1.15;
+  vector-effect: non-scaling-stroke;
+}
+
+.history-line-hit-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  cursor: crosshair;
+  background: transparent;
+}
+
+.history-line-crosshair {
+  position: absolute;
+  top: 0;
+  bottom: 24px;
+  width: 0;
+  margin-left: 0;
+  border-left: 1px solid rgba(22, 33, 29, 0.22);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 90ms ease;
+}
+
+.history-line-crosshair.is-visible {
+  opacity: 1;
+}
+
+.history-line-hover-tooltip {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  transform: translateX(-50%);
+  padding: 6px 9px;
+  border-radius: 10px;
+  background: rgba(22, 33, 29, 0.94);
+  color: #fff;
+  font-size: 0.74rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 6;
+  opacity: 0;
+  transition: opacity 90ms ease;
+  max-width: min(280px, 90vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-line-hover-tooltip.is-visible {
+  opacity: 1;
 }
 
 .history-point {
@@ -578,6 +636,56 @@ body.is-loading .page-loading {
 .indicator-card .card-explanation {
   margin-top: 12px;
   margin-bottom: 0;
+}
+
+.age-breakdown {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.age-breakdown-title {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.age-breakdown-heading {
+  font-weight: 800;
+}
+
+.age-breakdown-year {
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.age-breakdown-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.age-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.age-breakdown-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.age-breakdown-value {
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .card-source {
