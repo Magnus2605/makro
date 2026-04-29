@@ -790,6 +790,189 @@ def _yahoo_chart_json(ticker: str, range_param: str = "2y", interval: str = "1d"
         return json.loads(response.read().decode("utf-8"))
 
 
+def _quarter_index_from_period(period: str) -> int | None:
+    """Konverter en DST-periode (fx YYYYK1 eller YYYYM01) til et kvartalindeks.
+
+    - YYYYKq: direkte kvartal
+    - YYYYMm: måned -> kvartal (gennemsnit over kvartalet bruges senere)
+    - YYYY: årligt -> map til Q4 (kun til fallback/ekstremt tilfælde)
+    """
+    p = str(period).strip()
+    if not p:
+        return None
+
+    # Årlige serier
+    if len(p) == 4 and p.isdigit():
+        year = int(p)
+        return year * 4 + 3
+
+    # Kvartal: 1992K1
+    if "K" in p and len(p) >= 6 and p[:4].isdigit():
+        year = int(p[:4])
+        q_raw = p[5:]
+        if q_raw.isdigit():
+            q = int(q_raw)
+            if 1 <= q <= 4:
+                return year * 4 + (q - 1)
+        return None
+
+    # Måned: 2000M01
+    if "M" in p and len(p) >= 7 and p[:4].isdigit():
+        year = int(p[:4])
+        try:
+            month = int(p[5:7])
+        except ValueError:
+            return None
+        if 1 <= month <= 12:
+            quarter = (month - 1) // 3 + 1
+            return year * 4 + (quarter - 1)
+
+    return None
+
+
+def _resample_series_to_quarters(series: list[dict[str, object]]) -> dict[int, float]:
+    """Aggreger en DST-serie til kvartalsniveau.
+
+    For månedlige data grupperes på kvartal og aggregeres med gennemsnit.
+    For kvartalsdata ligger hvert punkt direkte i dets kvartal.
+    """
+    buckets: dict[int, list[float]] = {}
+    for pt in series:
+        period = str(pt.get("period") or "")
+        qidx = _quarter_index_from_period(period)
+        if qidx is None:
+            continue
+        val = pt.get("value")
+        if val is None:
+            continue
+        try:
+            fval = float(val)
+        except (TypeError, ValueError):
+            continue
+        buckets.setdefault(qidx, []).append(fval)
+
+    return {qidx: (sum(vals) / len(vals)) for qidx, vals in buckets.items() if vals}
+
+
+def _pearson_corr(xs: list[float], ys: list[float]) -> float:
+    n = len(xs)
+    if n != len(ys) or n < 3:
+        return 0.0
+
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    num = 0.0
+    den_x = 0.0
+    den_y = 0.0
+    for x, y in zip(xs, ys):
+        dx = x - mean_x
+        dy = y - mean_y
+        num += dx * dy
+        den_x += dx * dx
+        den_y += dy * dy
+
+    den = (den_x * den_y) ** 0.5
+    if den == 0:
+        return 0.0
+    return num / den
+
+
+def _housing_drivers_insights(series_by_id: dict[str, list[dict[str, object]]]) -> dict[str, object] | None:
+    """Beregn en 'driver'-liste for `housing-prices` via lag-korrelation.
+
+    MVP: Simple lag-korrelationer (0..4 kvartaler) mellem boligpriser og et lille sæt plausible makrokandidater.
+    """
+    target_id = "housing-prices"
+    if target_id not in series_by_id:
+        return None
+
+    target_q = _resample_series_to_quarters(series_by_id[target_id])
+    if len(target_q) < 8:
+        return None
+
+    # Plausible kandidater i første version (du kan udvide senere)
+    candidate_ids = [
+        "interest-rate",
+        "unemployment",
+        "inflation",
+        "core-inflation",
+        "gdp-growth",
+    ]
+    candidate_ids = [cid for cid in candidate_ids if cid in series_by_id and cid != target_id]
+    if not candidate_ids:
+        return None
+
+    best_per_candidate: list[dict[str, object]] = []
+    for cid in candidate_ids:
+        cand_q = _resample_series_to_quarters(series_by_id[cid])
+        if len(cand_q) < 8:
+            continue
+
+        best = {"corr": 0.0, "lag": 0}
+        for lag in range(0, 5):  # 0..4 kvartaler
+            xs: list[float] = []
+            ys: list[float] = []
+            for qidx, y in target_q.items():
+                prev_qidx = qidx - lag
+                if prev_qidx in cand_q:
+                    xs.append(cand_q[prev_qidx])
+                    ys.append(y)
+            if len(xs) < 8:
+                continue
+            corr = _pearson_corr(xs, ys)
+            if abs(corr) > abs(best["corr"]):
+                best = {"corr": corr, "lag": lag}
+
+        if "corr" in best:
+            best_per_candidate.append(
+                {
+                    "id": cid,
+                    "label": str(SERIES_CONFIG[cid]["label"]),
+                    "corr": float(best["corr"]),
+                    "lag": int(best["lag"]),
+                }
+            )
+
+    best_per_candidate.sort(key=lambda x: abs(float(x["corr"])), reverse=True)
+    top = best_per_candidate[:3]
+    if not top:
+        return None
+
+    # Narrativ uden at love kausalitet
+    items: list[dict[str, object]] = []
+    for item in top:
+        corr = float(item["corr"])
+        lag = int(item["lag"])
+        direction_txt = "stiger" if corr > 0 else "falder"
+        later_txt = f"om {lag} kvartaler" if lag else "i samme periode"
+        strength_abs = abs(corr)
+        if strength_abs >= 0.55:
+            strength_label = "stærk sammenhæng"
+        elif strength_abs >= 0.35:
+            strength_label = "moderat sammenhæng"
+        else:
+            strength_label = "svag sammenhæng"
+
+        # 0..100 til en lille visual “styrke-bar”
+        strength_score = int(min(max(strength_abs, 0.0), 1.0) * 100)
+        items.append(
+            {
+                "driverLabel": item["label"],
+                "lagQuarters": lag,
+                "strengthLabel": strength_label,
+                "strengthScore": strength_score,
+                "narrative": (
+                    f"Når indikatoren {direction_txt}, ses et mønster i boligpriserne der {later_txt}."
+                ),
+            }
+        )
+
+    return {
+        "title": "Hvad påvirker boligpriserne?",
+        "items": items,
+    }
+
+
 def _parse_yahoo_chart_closes(
     payload: dict[str, object], *, min_points: int = 5
 ) -> tuple[list[str], list[float], str]:
@@ -1327,6 +1510,7 @@ def build_live_payload() -> dict[str, object]:
                 series_payload = fetch_housing_share_by_age_fu18_series()
             else:
                 series_payload = fetch_dst_series(SERIES_CONFIG[indicator_id])
+
             built = build_indicator(indicator_id, series_payload)
             section_indicators.append(built)
             indicators.append(built)
