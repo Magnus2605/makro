@@ -93,6 +93,25 @@ SERIES_CONFIG = {
         ),
         "sourceLabel": "Danmarks Statistik, PRIS01",
     },
+    "core-inflation": {
+        "table": "PRIS01",
+        "variables": [
+            # Core inflation: excl. energy and unprocessed food
+            {"code": "VAREGR", "values": ["151"]},
+            {"code": "ENHED", "values": ["300"]},
+            {"code": "Tid", "values": ["*"]},
+        ],
+        "goodDirection": "down",
+        "label": "Kerneinflation",
+        "unit": "%",
+        "importance": "H\u00f8j",
+        "explanation": (
+            "Kerneinflation er inflationen renset for energipriser og uforarbejdede f\u00e5devarer. "
+            "Det giver ofte et mere stabilt m\u00e5l for den underliggende prisudvikling end den "
+            "samlede inflation."
+        ),
+        "sourceLabel": "Danmarks Statistik, PRIS01",
+    },
     "unemployment": {
         "table": "AKU101K",
         "variables": [
@@ -243,6 +262,30 @@ SERIES_CONFIG = {
         "explanation": (
             "Boligpriserne fortæller, hvordan prisniveauet på enfamiliehuse udvikler sig fra "
             "kvartal til kvartal. Det siger noget om både boligmarked og husholdningernes formue."
+        ),
+        "sourceLabel": "Danmarks Statistik, EJ56",
+    },
+    "housing-condo-prices-copenhagen": {
+        "table": "EJ56",
+        "variables": [
+            # OMRÅDE: "01" = Landsdel Byen København
+            {"code": "OMRÅDE", "values": ["01"]},
+            # EJENDOMSKATE: "2103" = Ejerlejligheder, i alt
+            {"code": "EJENDOMSKATE", "values": ["2103"]},
+            # TAL: "310" = Ændring ift. samme kvartal året før (pct.)
+            {"code": "TAL", "values": ["310"]},
+            {"code": "Tid", "values": ["*"]},
+        ],
+        "goodDirection": "up",
+        "chartMode": "line",
+        "label": "Prisudvikling for ejerlejligheder i København",
+        "unit": "%",
+        "scaleUnit": "%",
+        "importance": "Mellem",
+        "explanation": (
+            "Her vises den kvartalsvise prisudvikling for ejerlejligheder i Landsdel Byen København. "
+            "Tallet er ændringen i forhold til samme kvartal året før (pct.), så positive værdier typisk "
+            "afspejler et stigende prisniveau."
         ),
         "sourceLabel": "Danmarks Statistik, EJ56",
     },
@@ -481,7 +524,11 @@ SERIES_CONFIG = {
 
 
 GROUP_DEFS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
-    ("overview", "Samlet \u00f8konomi", ("inflation", "unemployment", "gdp-growth")),
+    (
+        "overview",
+        "Samlet \u00f8konomi",
+        ("inflation", "core-inflation", "unemployment", "gdp-growth"),
+    ),
         (
         "demand",
         "Forbrug og offentlig sektor",
@@ -501,6 +548,7 @@ GROUP_DEFS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "Bolig og finansiering",
         (
             "housing-prices",
+                "housing-condo-prices-copenhagen",
             "housing-burden-income",
             "housing-share-age-fu18",
             "housing-debt-families",
@@ -1116,6 +1164,7 @@ def _month_periods_ending(end_year: int, end_month: int, count: int) -> list[str
 
 _STUB_DISPLAY_BASE: dict[str, float] = {
     "inflation": 2.1,
+    "core-inflation": 1.7,
     "unemployment": 5.5,
     "gdp-growth": 0.8,
     "consumer-confidence": -5.0,
@@ -1130,6 +1179,7 @@ _STUB_DISPLAY_BASE: dict[str, float] = {
     "export-growth": 1.2,
     "import-growth": 0.9,
     "housing-prices": 2.5,
+    "housing-condo-prices-copenhagen": 1.8,
     "housing-debt-families": 4100.0,
     "realkredit-outstanding-hh": 1680.0,
     "interest-rate": 3.4,

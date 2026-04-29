@@ -6,7 +6,9 @@ alwaysApply: true
 Efter **hver** ændring i `server.py`, `public/` (fx `app.js`, `index.html`, `styles.css`) eller andet der påvirker den kørende app eller `/api/macro`, skal du **før du afslutter** opgaven:
 
 1. **Stoppe** processen der lytter på `PORT` (standard **3000**), og **starte** backend igen fra projektmappen (`python server.py`, eller `npm start` hvis I bruger det).
-2. Kort bekræfte at servicen svarer (fx HTTP 200 mod `/` eller `/api/macro`).
+2. **Bekræfte at servicen er “ready”** før du går videre:
+   - Brug `GET /api/macro` (anbefalet) eller `/` som hurtig helbredstjek.
+   - Hvis request timeout/fejl opstår lige efter genstart, så brug **retry/poll** i op til ca. 30-60 sek (serveren kan bruge tid på den første DST-hentning).
 
 Ellers ser brugeren stadig gammel kode.
 

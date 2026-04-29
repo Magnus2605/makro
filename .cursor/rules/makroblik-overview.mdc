@@ -1,0 +1,48 @@
+---
+description: Makroblik-repo — formål, stack og hvordan agenter arbejder effektivt
+alwaysApply: true
+---
+
+# Makroblik (makro)
+
+## Formål
+**Makroblik** er en lille dansk **makro-oversigt**: én side med **nøgletal grupperet efter tema** (inflation, efterspørgsel, bolig, markeder m.m.), kort forklaringer og **live data** fra Danmarks Statistik (og tilsvarende kilder via Statistikbanken). Målgruppen er hurtigt overblik — ikke finansiel rådgivning eller officiel statistik-udlægning.
+
+## Stack
+- **Backend:** `server.py` — `ThreadingHTTPServer`, endpoint **`GET /api/macro`** (JSON, `Cache-Control: no-store`), statiske filer fra **`public/`**.
+- **Frontend:** `public/index.html`, `app.js`, `styles.css` — én dashboard-render fra API (`renderDashboard` → kort fra skabelon `#indicator-template`).
+- **Ingen** separat DB; **ingen** hemmeligheder i kode — brug **`.env` + `os.environ`** i Python (se `server.py` øverst). Fuld tabel over variabler: **`README.md`** og **`.env.example`**. Valgfri: `STOCK_SENTIMENT_TICKER` (Yahoo-symbol for OMX-kortet; default `^OMXC25`).
+
+## Hvor logikken bor
+- **`SERIES_CONFIG`:** ét opslag pr. indikator-id (DST-tabel + `variables`, enhed, forklaring).
+- **`GROUP_DEFS`:** rækkefølge og gruppering i UI.
+- **`build_live_payload()`:** henter serier, bygger kort via `build_indicator()`. **Special-cases:** `stock-sentiment` (Yahoo), `housing-burden-income` (FU12+FU19), `housing-share-age-fu18` (FU18 + aldersfordeling), ellers `fetch_dst_series()`.
+- **Fallback:** `build_fallback_payload()` / `_stub_series_payload()` skal matche **alle** `INDICATOR_IDS` (ellers cache/validering fejler).
+- **`INDICATOR_IDS`** er **afledt** af `GROUP_DEFS` — tilføj aldrig manuelt et id et andet sted uden at det også står i `GROUP_DEFS`.
+
+## Nyt kort / ny værdi (tjekliste)
+1. **Vælg** et stabilt `indicator_id` (samme stil som eksisterende, fx `my-topic-name`).
+2. **`GROUP_DEFS`:** tilføj id’et i den rigtige gruppe-tuple (rækkefølge = UI-rækkefølge).
+3. **`SERIES_CONFIG`:** tabel, `variables`, enhed, titel/forklaring — kopier struktur fra et lignende kort.
+4. **`build_live_payload()`:** enten ingen ekstra kode (så bruges `fetch_dst_series(SERIES_CONFIG[id])`), eller ny `elif indicator_id == "..."` + egen `fetch_*` hvis data ikke er ét enkelt DST-kald.
+5. **`_stub_series_payload()`:** ny `elif` med realistisk stub (samme “form” som live-payload for det id).
+6. **Kør** sanity-check (se skill `makroblik-handoff`) — `live` og antal indikatorer skal stemme.
+7. **Kun hvis UI skal vise noget nyt** (ekstra felter ud over standardtidsserie): opdatér `build_indicator()`, evt. `#indicator-template` i `index.html`, og `renderIndicator` i `app.js` (+ `styles.css`).
+
+## Cache og API-adfærd
+- **`GET /api/macro`** bygger ét samlet JSON-svar; svaret **caches i hukommelsen** på serveren i **`CACHE_TTL_SECONDS`** (default 6 t). Under udvikling: sænk TTL eller genstart serveren for at se friske DST-data med det samme.
+- Cache accepteres kun hvis antal indikatorer/grupper stadig matcher forventning (ellers hentes på ny).
+- **`stock-sentiment`** hentes via **Yahoo** (ikke DST); `augment_payload_with_stock_sentiment()` kan tilføje det selv ved delvis fejl — kopiér ikke blindt det mønster til nye kort uden at læse funktionen.
+
+## DST / Statistikbank
+- **Mini-eksempler** (POST-body, `series_payload`, stub): se skill **`makroblik-handoff`** → afsnittet *Mini-eksempler*.
+- Find tabel-id og dimensioner i **[Statistikbanken](https://www.statbank.dk/)** (vælg tabel → se variable) eller DST’s metadata; derefter spejl **`SERIES_CONFIG`** + `fetch_dst_series` fra et lignende kort.
+- API: **`POST`** til `DST_API_URL` (standard `https://api.statbank.dk/v1/data`) med `table`, `format: JSONSTAT`, `variables` (dimension-koder som i API — ofte **STORE BOGSTAVER** i responsen, fx `KONSUMGRP`, `Tid`).
+- Flerdimensionelle tabeller (fx **FU18**): brug fast indeks-/pick-logik (se `_jsonstat_pick_scalar` i `server.py`) — blind gæt på variabelnavne giver **400**.
+- **Bolig:** `housing-burden-income` = andel af **disponibel indkomst (FU19 M)** til bolig/energi **FU12 COICOP 04**; `housing-share-age-fu18` = **andel af forbruget** (04/00) **pr. alder** (FU18) + tidsserie for gennemsnitshusstand.
+
+## Effektiv agent-adfærd (spar tokens/tid)
+1. **Læs** den relevante blok i `server.py` (config + fetch + `build_live_payload`) **før** du gætter DST-koder.
+2. **Ændr kun** det der kræves til opgaven; undgå drive-by refactors.
+3. Efter ændringer i server eller `public/`: følg projektets regel **restart-python-server** (genstart + verificér `/api/macro`).
+4. Undgå at konkludere at UI er opdateret ud fra lokale Python-kald (fx import af `build_live_payload()`); verificér altid via HTTP endpoint (`GET /api/macro`).

@@ -31,6 +31,7 @@ Kopiér `.env.example` til `.env` og justér ved behov:
 | `PORT` | Lokal serverport (standard `3000`) |
 | `CACHE_TTL_SECONDS` | Cache for `/api/macro` i sekunder (standard `21600` = 6 timer) |
 | `DST_API_URL` | Valgfri — kun hvis du skal pege et andet sted hen end standard StatBank-API |
+| `STOCK_SENTIMENT_TICKER` | Valgfri — Yahoo-finans symbol til OMX-kortet (standard `^OMXC25`) |
 | `PYTHON` | Valgfri — hvilken Python-binary `npm start` bruger (fx `py -3.11` på Windows) |
 
 Der kræves **ingen API-nøgle** til de åbne DST-data.
